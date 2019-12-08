@@ -74,6 +74,8 @@ def parse_input_node(origin, node):
     (0, -5)
     >>> parse_input_node((0,0), 'R10')
     (10, 0)
+    >>> parse_input_node((1,1), 'R10')
+    (11, 1)
     """
     direction = direction_map[node[0]]
     value = int(node[1:])
@@ -91,31 +93,39 @@ def parse_input_sequence(sequence):
     [(0, 0), (0, 7), (6, 7), (6, 3), (2, 3)]
     """
     node_sequence = [(0,0)]
-    previous_node = node_sequence[0]
-    
+
     for node in sequence:
-        new_node = parse_input_node(previous_node, node)
+        new_node = parse_input_node(node_sequence[-1], node)
         node_sequence.append(new_node)
-        previous_node = new_node
-    
+
     return node_sequence
 
-def find_intersection(p1, p2, p3, p4):
-    x12 = p1[0] - p2[0];
-    x34 = p3[0] - p4[0];
-    y12 = p1[1] - p2[1];
-    y34 = p3[1] - p4[1];
+def contained(a, b, x):
+    return min(a, b) < x < max(a, b)
 
-    c = x12 * y34 - y12 * x34;
+def linear_interp_intersect(seg1, seg2):
+    """"
+    >>> linear_interp_intersect([(-2,1),(2,1)],[(0,0),(0,5)])
+    (0, 1)
+    >>> linear_interp_intersect([(2,1),(-2,1)],[(0,0),(0,5)])
+    (0, 1)
+    >>> linear_interp_intersect([(0,0),(5,0)],[(2,1),(2,-1)])
+    (2, 0)
+    >>> linear_interp_intersect([(2,1),(2,-1)],[(0,0),(5,0)])
+    >>> linear_interp_intersect([(0,5),(0,0)],[(2,1),(-2,1)])
+    >>> linear_interp_intersect([(0,0),(0,5)],[(2,1),(-2,1)])
+    >>> linear_interp_intersect([(8, 0), (8, 5)], [(6, 3), (2, 3)])
+    >>> linear_interp_intersect([(6, 3), (2, 3)], [(8, 0), (8, 5)])
+    >>> linear_interp_intersect([(0, 0), (8, 0)], [(0, 0), (0, 7)])
+    >>> linear_interp_intersect([(0, 0), (8, 0)], [(6, 7), (6, 3)])
+    """
+    x_intersect = contained(seg1[0][0], seg1[1][0], seg2[0][0])
+    y_intersect = contained(seg2[0][1], seg2[1][1], seg1[0][1])
 
-    if (abs(c) > 0.01):
-        a = p1[0] * p2[1] - p1[1] * p2[0];
-        b = p3[0] * p4[0] - p3[1] * p4[0];
-
-        x = (a * x34 - b * x12) / c;
-        y = (a * y34 - b * y12) / c;
-        return (True, (int(x), int(y)))
-    return (False, ())
+    if x_intersect and y_intersect:
+        return (seg2[0][0], seg1[0][1])
+    else:
+        return None
 
 def find_intersections(node_seq_a, node_seq_b):
     """
@@ -139,6 +149,8 @@ def find_intersections(node_seq_a, node_seq_b):
     []
     >>> find_intersections([(1,5), (5,5)], [(0,0), (0,10)])
     []
+    >>> find_intersections([(0,0),(8,0),(8,5),(3,5),(3,2)],[(0,0),(0,7),(6,7),(6,3),(2,3)])
+    [(6, 5), (3, 3)]
     """
     prev_node_a = node_seq_a[0]
     prev_node_b = node_seq_b[0]
@@ -147,27 +159,55 @@ def find_intersections(node_seq_a, node_seq_b):
 
     for node_a in node_seq_a[1:]:
         for node_b in node_seq_b[1:]:
-            found, intersection = find_intersection(prev_node_a, node_a, prev_node_b, node_b)
+            # print([prev_node_a, node_a], [prev_node_b, node_b])
+            intersection = linear_interp_intersect([prev_node_a, node_a], [prev_node_b, node_b])
 
-            if found:
+            if intersection:
+                # print([prev_node_a, node_a], [prev_node_b, node_b], intersection)
+                intersections.append(intersection)
+
+            # Check reverse
+            intersection = linear_interp_intersect([prev_node_b, node_b], [prev_node_a, node_a])
+
+            if intersection:
+                # print([prev_node_b, node_b], [prev_node_a, node_a], intersection)
                 intersections.append(intersection)
 
             prev_node_b = node_b
         prev_node_a = node_a
+        prev_node_b = node_seq_b[0]
 
     return intersections
 
-def func(seq_a, seq_b):
+def find_manhattan_distance(seq_a, seq_b):
     """
-    >>> func(['R8','U5','L5','D3'],['U7','R6','D4','L4'])
+    >>> find_manhattan_distance( \
+        ['R8','U5','L5','D3'],['U7','R6','D4','L4'])
+    6
+    >>> find_manhattan_distance( \
+        ['R75','D30','R83','U83','L12','D49','R71','U7','L72'], \
+        ['U62','R66','U55','R34','D71','R55','D58','R83'])
+    159
+    >>> find_manhattan_distance( \
+        ['R98','U47','R26','D63','R33','U87','L62','D20','R33','U53','R51'], \
+        ['U98','R91','D20','R16','D67','R40','U7','R15','U6','R7'])
+    135
     """
     node_seq_a = parse_input_sequence(seq_a)
     node_seq_b = parse_input_sequence(seq_b)
-    return find_intersections(node_seq_a, node_seq_b)
 
-    pass
+    intersections = find_intersections(node_seq_a, node_seq_b)
+
+    nearest_node = min([abs(intersect[0]) + abs(intersect[1]) for intersect in intersections])
+
+    return nearest_node
+
+def solve_fuel_wirring():
+    codes = read_codes('day_3_input.txt')
+    return find_manhattan_distance(codes[0], codes[1])
 
 #------------------------------------------------------------------------------#
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
+    # import doctest
+    # doctest.testmod()
+    print(solve_fuel_wirring())
